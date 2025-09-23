@@ -22,7 +22,7 @@ from pyqtgraph import mkPen
 from enum import Enum
 from PyQt6.QtSerialPort import QSerialPortInfo, QSerialPort
 from PyQt6.QtCore import Qt, pyqtSignal, QIODevice, QTimer, QTime, pyqtSlot, QUrl
-from PyQt6.QtGui import QFont, QIcon, QIntValidator, QColor, QPalette
+from PyQt6.QtGui import QFont, QIcon, QIntValidator, QColor, QPalette, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -43,6 +43,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QAbstractItemView,
+    QTextEdit,
     QApplication,
 )
 
@@ -732,16 +733,18 @@ class GroundStationApp(QMainWindow):
         log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         log_title.setFont(graph_sidebar_font)
 
-        self.gui_log = QListWidget()
-        self.gui_log.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
-        self.gui_log.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.gui_log = QTextEdit()
+        self.gui_log.setReadOnly(True)
         self.gui_log.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.gui_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        self.gui_log.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.gui_log.setStyleSheet("""
-            QListWidget {
+            QTextEdit {
                 font-size: 18px;
                 background-color: #dcdcdc;
                 border-radius: 6px;
                 padding: 3px;
+                font-family: monospace;
             }
         """)
 
@@ -955,10 +958,12 @@ class GroundStationApp(QMainWindow):
         self.get_log_overlay.setGeometry(self.rect())
 
     def update_gui_log(self, msg, color="black"):
-        log_item = QListWidgetItem(f"{QTime.currentTime().toString('h:mm AP')}     {msg}")
-        log_item.setForeground(QColor(color))
-        self.gui_log.addItem(log_item)
-        self.gui_log.scrollToBottom()
+        
+        self.gui_log.moveCursor(QTextCursor.MoveOperation.End)
+        self.gui_log.setTextColor(QColor(color))
+        self.gui_log.append(f"{QTime.currentTime().toString('h:mm AP')}     {msg}")
+        scrollbar = self.gui_log.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     # Change what buttons are shown in the commands box
     def command_group_change_buttons(self, mode):
