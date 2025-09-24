@@ -1,0 +1,3 @@
+"""
+Front end GUI elements
+"""
