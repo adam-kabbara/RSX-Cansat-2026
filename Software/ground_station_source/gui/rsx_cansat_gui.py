@@ -1272,7 +1272,7 @@ class GroundStationApp(QMainWindow):
             if "BEGIN_SIMP" in msg:
                 if(self.__cansat_mode == "SIM"):
                     try:
-                        with open("cansat_2023_simp.txt", 'r') as file:
+                        with open("team1011_sim_data.txt", 'r') as file:
                             for line in file:
                                 if line.startswith("CMD,$,SIMP"):
                                     line = line.replace('$', str(self.__TEAM_ID))
