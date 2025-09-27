@@ -729,9 +729,13 @@ class GroundStationApp(QMainWindow):
         log_widget = QWidget()
         log_layout = QVBoxLayout(log_widget)
 
-        log_title = QLabel("Command Log")
-        log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        log_title.setFont(graph_sidebar_font)
+        gui_log_title = QLabel("Command Log")
+        gui_log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        gui_log_title.setFont(graph_sidebar_font)
+
+        error_log_title = QLabel("Error Log")
+        error_log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        error_log_title.setFont(graph_sidebar_font)
 
         self.gui_log = QTextEdit()
         self.gui_log.setReadOnly(True)
@@ -748,8 +752,26 @@ class GroundStationApp(QMainWindow):
             }
         """)
 
-        log_layout.addWidget(log_title)
+        self.error_log = QTextEdit()
+        self.error_log.setReadOnly(True)
+        self.error_log.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.error_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        self.error_log.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.error_log.setStyleSheet("""
+            QTextEdit {
+                font-size: 18px;
+                background-color: #dcdcdc;
+                border-radius: 6px;
+                padding: 3px;
+                font-family: monospace;
+            }
+        """)
+
+        log_layout.addWidget(gui_log_title)
         log_layout.addWidget(self.gui_log)
+
+        log_layout.addWidget(error_log_title)
+        log_layout.addWidget(self.error_log)
 
         grid_layout.setColumnStretch(2,1)
 
@@ -958,11 +980,14 @@ class GroundStationApp(QMainWindow):
         self.get_log_overlay.setGeometry(self.rect())
 
     def update_gui_log(self, msg, color="black"):
-        
-        self.gui_log.moveCursor(QTextCursor.MoveOperation.End)
-        self.gui_log.setTextColor(QColor(color))
-        self.gui_log.append(f"{QTime.currentTime().toString('h:mm AP')}     {msg}")
-        scrollbar = self.gui_log.verticalScrollBar()
+        if color == "red":
+            target_log = self.error_log
+        else:
+            target_log = self.gui_log
+        target_log.moveCursor(QTextCursor.MoveOperation.End)
+        target_log.setTextColor(QColor(color))
+        target_log.append(f"{QTime.currentTime().toString('h:mm AP')}     {msg}")
+        scrollbar = target_log.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
     # Change what buttons are shown in the commands box
@@ -1296,6 +1321,7 @@ class GroundStationApp(QMainWindow):
     
     def reset_mission(self):     
         self.gui_log.clear()
+        self.error_log.clear()
         for plotter in self.plotters:
                 plotter.reset_plot()
         self.__csv_file.seek(0)
