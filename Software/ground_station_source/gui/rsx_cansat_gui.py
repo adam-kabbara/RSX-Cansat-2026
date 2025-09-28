@@ -293,6 +293,8 @@ class GroundStationApp(QMainWindow):
         self.__last_gyro_r                  = 0.0
         self.__last_gyro_p                  = 0.0
         self.__last_gyro_y                  = 0.0
+        self.log_repeat_count             = 0
+        self.last_msg, self.last_color  = None, None
 
         self.setWindowTitle("CANSAT Ground Station")
         self.setWindowIcon(QIcon('icon.png'))
@@ -984,9 +986,24 @@ class GroundStationApp(QMainWindow):
             target_log = self.error_log
         else:
             target_log = self.gui_log
-        target_log.moveCursor(QTextCursor.MoveOperation.End)
-        target_log.setTextColor(QColor(color))
-        target_log.append(f"{QTime.currentTime().toString('h:mm AP')}     {msg}")
+        current_time = QTime.currentTime().toString('h:mm AP')
+        if msg == self.last_msg and color == self.last_color:
+            self.log_repeat_count += 1
+            target_log.setTextColor(QColor(color))
+            cursor = target_log.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock, QTextCursor.MoveMode.MoveAnchor)
+            cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+            cursor.insertText(f"{current_time} [{self.log_repeat_count}] {msg}")
+            cursor.clearSelection()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            target_log.setTextCursor(cursor)
+        else:
+            self.log_repeat_count = 1
+            self.last_msg = msg
+            self.last_color = color
+            target_log.setTextColor(QColor(color))
+            target_log.append(f"{current_time}     {msg}")
         scrollbar = target_log.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
