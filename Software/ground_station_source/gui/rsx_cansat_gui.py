@@ -46,6 +46,7 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QApplication,
 )
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 # Structure to store packet data
 @dataclass(frozen=True)
@@ -778,6 +779,8 @@ class GroundStationApp(QMainWindow):
                                     stop:1 rgba(210, 210, 210, 255)); 
             }
         """)
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
+
 
         self.graphs = []
         self.plotters = []
@@ -793,7 +796,8 @@ class GroundStationApp(QMainWindow):
             {"title": "Magnetometer", "lines": 3, "2d": False, "x_unit": "s", "y_unit": "G"},
             {"title": "Rotation", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "deg/s"},
             {"title": "GPS Lat v Long", "lines": 1, "2d": True, "x_unit": "Latitude", "y_unit": "Longitude"},
-            {"title": "GPS Altitude", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "m"}
+            {"title": "GPS Altitude", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "m"},
+            {"title": "GPS Map", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "m"}
         ]   
         
         self.graph_title_to_index = {
@@ -808,6 +812,7 @@ class GroundStationApp(QMainWindow):
             "Rotation" : 8,
             "GPS" : 9,
             "GPS Altitude": 10,
+            "GPS Map": 11
         }
 
         # Loop through each graph and create a plot using the plot classes
@@ -817,10 +822,20 @@ class GroundStationApp(QMainWindow):
             tab_content = QGroupBox()
             tab_layout = QVBoxLayout()
 
+            if entry["title"] == "GPS Map":
+                self.gps_map_webview = QWebEngineView()
+                tab_layout.addWidget(self.gps_map_webview)
+                tab_content.setLayout(tab_layout)
+                self.tab_widget.addTab(tab_content, entry["title"])
+                self.graphs.append(None)
+                self.plotters.append(None)
+                continue
+
             graph = pg.PlotWidget()
             graph.setBackground('w')
             graph.setAlignment(Qt.AlignmentFlag.AlignCenter)
             tab_layout.addWidget(graph)
+            
 
             tab_content.setLayout(tab_layout)
 
@@ -924,34 +939,24 @@ class GroundStationApp(QMainWindow):
         self.showMaximized()
     
     # ------ FUNCTIONS ------ #
+    def on_tab_changed(self, index):
+        # If the new tab is the GPS Map tab, update the map view
+        if index == self.graph_title_to_index.get("GPS Map"):
+            self.update_map_view(self.GPS_LAT, self.GPS_LONG)
+
     def update_map_view(self, lat, lon):
         try:
-            # if self.GPS_LAT or self.GPS_LONG are not valid, open a not updated map thing
-            if lat is None or lon is None or lat == 0.0 or lon == 0.0:
-                self.update_gui_log("No GPS data yet", "red")
-                return
-            '''
-            map_object = folium.Map(location=[lat, lon], zoom_start=15, prefer_canvas=True)
-            folium.Marker([lat, lon], tooltip="CanSat Location").add_to(map_object)
-
-            html = map_object.get_root().render()
-            html = html.replace(
-                    'https://unpkg.com/leaflet@1.7.1/dist/leaflet.css',
-                    'leaflet/leaflet.css'
-                ).replace(
-                    'https://unpkg.com/leaflet@1.7.1/dist/leaflet.js',
-                    'leaflet/leaflet.js'
-                )
+            # Currently map is plotting dummy data. 
+            # TODO: use real GPS data from lat and lon variables to plot to the webview
+            if self.gps_map_webview:
+                url = f"http://127.0.0.1:5000"
+                self.gps_map_webview.load(QUrl(url))
+                self.update_gui_log(f"Updated embedded map view to: {url}", "blue")
             
-            with open("map.html", "w", encoding="utf-8") as f:
-                f.write(html)
-        
-            webbrowser.open("map.html", new=2) '''
-            webbrowser.open(f"https://www.google.com/maps/place/{lat},{lon}", new=2) # use google maps if there is data
-
-
         except Exception as e:
             self.update_gui_log(f"Map update failed: {e}", "red")
+            webbrowser.open("map.html", new=2)
+
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
