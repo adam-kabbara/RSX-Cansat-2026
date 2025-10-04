@@ -1,0 +1,118 @@
+Configuration	project_files
+STM32CubeMX 	6.15.0
+Date	10/04/2025
+MCU	STM32G431KBTx
+
+
+
+PERIPHERALS	MODES	FUNCTIONS	PINS
+ADC1	IN1 Single-ended	ADC1_IN1	PA0
+I2C1	I2C	I2C1_SCL	PA15
+I2C1	I2C	I2C1_SDA	PB7
+SPI1	Full-Duplex Master	SPI1_MISO	PA6
+SPI1	Full-Duplex Master	SPI1_MOSI	PA7
+SPI1	Full-Duplex Master	SPI1_SCK	PA5
+SYS	Trace Asynchronous Sw	SYS_JTMS-SWDIO	PA13
+SYS	Trace Asynchronous Sw	SYS_JTCK-SWCLK	PA14
+SYS	Trace Asynchronous Sw	SYS_JTDO-SWO	PB3
+SYS	Power Voltage Detector In (Internal analog voltage)	SYS_V_PVD_IN	VP_SYS_V_PVD_IN
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+SYS	Dead Battery Signals disabled	SYS_VS_DBSignals	VP_SYS_VS_DBSignals
+TIM1	Internal Clock	TIM1_VS_ClockSourceINT	VP_TIM1_VS_ClockSourceINT
+USART1	Asynchronous	USART1_RX	PA10
+USART1	Asynchronous	USART1_TX	PA9
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+2	PF0-OSC_IN	GPIO_Output	SERVO_OUT2
+3	PF1-OSC_OUT	GPIO_Output	SERVO_OUT3
+5	PA0	ADC1_IN1	VOLTAGE_ADC
+6	PA1	GPIO_Output	SERVO_OUT1
+9	PA4	GPIO_Output	SPI_CS_GPIO_OUT
+10	PA5	SPI1_SCK	
+11	PA6	SPI1_MISO	
+12	PA7	SPI1_MOSI	
+13	PB0	GPIO_Output	SERVO_OUT5
+18	PA8	GPIO_Output	PG_CAM_OUT
+19	PA9	USART1_TX	XBEE_TX
+20	PA10	USART1_RX	XBEE_RX
+21	PA11	GPIO_Output	SERVO_OUT4
+22	PA12	GPIO_Output	G_CAM_OUT
+23	PA13	SYS_JTMS-SWDIO	T_SWDIO
+24	PA14	SYS_JTCK-SWCLK	T_SWCLK
+25	PA15	I2C1_SCL	I2C_SCL
+26	PB3	SYS_JTDO-SWO	T_SWO
+27	PB4	GPIO_Output	SERVO_OUT6
+28	PB5	GPIO_Input	PG_CAM_IN
+29	PB6	GPIO_Input	G_CAM_IN
+30	PB7	I2C1_SDA	I2C_SDA
+PERIPHERALS	MODES	FUNCTIONS	PINS
+ADC1	IN1 Single-ended	ADC1_IN1	PA0
+I2C1	I2C	I2C1_SCL	PA15
+I2C1	I2C	I2C1_SDA	PB7
+SPI1	Full-Duplex Master	SPI1_MISO	PA6
+SPI1	Full-Duplex Master	SPI1_MOSI	PA7
+SPI1	Full-Duplex Master	SPI1_SCK	PA5
+SYS	Trace Asynchronous Sw	SYS_JTMS-SWDIO	PA13
+SYS	Trace Asynchronous Sw	SYS_JTCK-SWCLK	PA14
+SYS	Trace Asynchronous Sw	SYS_JTDO-SWO	PB3
+SYS	Power Voltage Detector In (Internal analog voltage)	SYS_V_PVD_IN	VP_SYS_V_PVD_IN
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+SYS	Dead Battery Signals disabled	SYS_VS_DBSignals	VP_SYS_VS_DBSignals
+TIM1	Internal Clock	TIM1_VS_ClockSourceINT	VP_TIM1_VS_ClockSourceINT
+USART1	Asynchronous	USART1_RX	PA10
+USART1	Asynchronous	USART1_TX	PA9
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+2	PF0-OSC_IN	GPIO_Output	SERVO_OUT2
+3	PF1-OSC_OUT	GPIO_Output	SERVO_OUT3
+5	PA0	ADC1_IN1	VOLTAGE_ADC
+6	PA1	GPIO_Output	SERVO_OUT1
+9	PA4	GPIO_Output	SPI_CS_GPIO_OUT
+10	PA5	SPI1_SCK	
+11	PA6	SPI1_MISO	
+12	PA7	SPI1_MOSI	
+13	PB0	GPIO_Output	SERVO_OUT5
+18	PA8	GPIO_Output	PG_CAM_OUT
+19	PA9	USART1_TX	XBEE_TX
+20	PA10	USART1_RX	XBEE_RX
+21	PA11	GPIO_Output	SERVO_OUT4
+22	PA12	GPIO_Output	G_CAM_OUT
+23	PA13	SYS_JTMS-SWDIO	T_SWDIO
+24	PA14	SYS_JTCK-SWCLK	T_SWCLK
+25	PA15	I2C1_SCL	I2C_SCL
+26	PB3	SYS_JTDO-SWO	T_SWO
+27	PB4	GPIO_Output	SERVO_OUT6
+28	PB5	GPIO_Input	PG_CAM_IN
+29	PB6	GPIO_Input	G_CAM_IN
+30	PB7	I2C1_SDA	I2C_SDA
+
+
+
+SOFTWARE PROJECT
+
+Project Settings : 
+Project Name : project_files
+Project Folder : C:\Users\LUKE\STM32CubeIDE\workspace_1.19.0\RSX-CANSAT-2026\Software\payload_source
+Toolchain / IDE : STM32CubeIDE
+Firmware Package Name and Version : STM32Cube FW_G4 V1.6.1
+
+
+Code Generation Settings : 
+STM32Cube MCU packages and embedded software packs : Copy only the necessary library files
+Generate peripheral initialization as a pair of '.c/.h' files per peripheral : No
+Backup previously generated files when re-generating : No
+Delete previously generated files when not re-generated : Yes
+Set all free pins as analog (to optimize the power consumption) : No
+
+
+Toolchains Settings : 
+Compiler Optimizations : 
+
+
+
+
+
