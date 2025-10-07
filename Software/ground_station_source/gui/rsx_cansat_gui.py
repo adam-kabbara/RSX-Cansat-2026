@@ -555,6 +555,10 @@ class GroundStationApp(QMainWindow):
         self.team_id_field_info.hide()
         self.team_id_field.hide()
 
+        self.gui_simulation_button = QPushButton("Start GUI Simulation")
+        self.gui_simulation_button.setFont(button_font)
+        self.gui_simulation_button.clicked.connect(self.start_gui_simulation) #TODO: WRITE THIS FUNCTION
+
         commands_layout.addWidget(self.button_connection_group)
         commands_layout.addWidget(self.combo_select_port)
         commands_layout.addWidget(self.button_connect)
@@ -581,6 +585,7 @@ class GroundStationApp(QMainWindow):
         commands_layout.addWidget(self.probe_release_force)
         commands_layout.addLayout(team_id_editing_box)
         commands_layout.addWidget(self.button_back)
+        commands_layout.addWidget(self.gui_simulation_button)
 
         grid_layout.setColumnStretch(0,1)
 
@@ -602,6 +607,7 @@ class GroundStationApp(QMainWindow):
             self.button_get_log_data,
             self.team_id_field,
             self.team_id_field_info,
+            self.gui_simulation_button,
         ]
 
         self.buttons_telemetry = [
@@ -710,6 +716,12 @@ class GroundStationApp(QMainWindow):
         self.camera2_status_label.setText(f'<span style="color:black;">CAMERA2 Status: \
                                               </span><span style="color:GREY;">N/A</span>')
 
+        self.simulation_on_or_off = QLabel()
+        self.simulation_on_or_off.setFont(command_status_font)
+        self.simulation_on_or_off.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.simulation_on_or_off.setText(f'<span style="color:black;">GUI Simulation: \
+                                              </span><span style="color:GREY;">OFF</span>')
+        
         status_layout.addWidget(self.label_port)
         status_layout.addWidget(self.label_remote_mode)
         status_layout.addWidget(self.label_remote_state)
@@ -719,6 +731,7 @@ class GroundStationApp(QMainWindow):
         status_layout.addWidget(self.camera1_status_label)
         status_layout.addWidget(self.camera2_status_label)
         status_layout.addWidget(self.label_cmd_echo)
+        status_layout.addWidget(self.simulation_on_or_off)
 
         grid_layout.setColumnStretch(1,1)
 
