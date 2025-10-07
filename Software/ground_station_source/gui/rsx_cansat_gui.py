@@ -293,6 +293,8 @@ class GroundStationApp(QMainWindow):
         self.__last_gyro_r                  = 0.0
         self.__last_gyro_p                  = 0.0
         self.__last_gyro_y                  = 0.0
+        self.__simulation_proc              = None
+        self.__simulation_mode              = False
 
         self.setWindowTitle("CANSAT Ground Station")
         self.setWindowIcon(QIcon('icon.png'))
@@ -557,7 +559,8 @@ class GroundStationApp(QMainWindow):
 
         self.gui_simulation_button = QPushButton("Start GUI Simulation")
         self.gui_simulation_button.setFont(button_font)
-        self.gui_simulation_button.clicked.connect(self.start_gui_simulation) #TODO: WRITE THIS FUNCTION
+        self.gui_simulation_button.clicked.connect(self.start_stop_gui_simulation) #TODO: WRITE THIS FUNCTION
+        self.gui_simulation_button.hide()
 
         commands_layout.addWidget(self.button_connection_group)
         commands_layout.addWidget(self.combo_select_port)
@@ -584,8 +587,8 @@ class GroundStationApp(QMainWindow):
         commands_layout.addWidget(self.button_get_log_data)
         commands_layout.addWidget(self.probe_release_force)
         commands_layout.addLayout(team_id_editing_box)
-        commands_layout.addWidget(self.button_back)
         commands_layout.addWidget(self.gui_simulation_button)
+        commands_layout.addWidget(self.button_back)
 
         grid_layout.setColumnStretch(0,1)
 
@@ -1091,6 +1094,9 @@ class GroundStationApp(QMainWindow):
             servo_label = self.servo_id_field.itemText(self.servo_id_field.findData(self.__servo_id))
             self.update_gui_log(f"Sent command to program {servo_label} to {self.__servo_val}")
 
+    def start_stop_gui_simulation(self):
+        pass
+
     def toggle_camera(self):
         if(self.send_data("CMD,%d,MEC,%s:X" % (self.__TEAM_ID, self.__camera_id))):
             self.update_gui_log(f"Sent {self.__camera_id} toggle command")
@@ -1198,6 +1204,11 @@ class GroundStationApp(QMainWindow):
             self.update_gui_log(f"SERIAL ERROR: {error} detected")
 
     def send_data(self, msg):
+        if self.__simulation_mode and self.__simulation_proc:
+            self.__simulation_proc.stdin.write((msg + "\n").encode()) # sending to simulation!!!!
+            return 1
+        
+
         if self.__serial.isOpen() is True:
             try:
                 msg = msg + "\n"
