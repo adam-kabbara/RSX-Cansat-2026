@@ -45,6 +45,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
     QTextEdit,
     QApplication,
+    QProcess,
 )
 
 # Structure to store packet data
@@ -1095,7 +1096,31 @@ class GroundStationApp(QMainWindow):
             self.update_gui_log(f"Sent command to program {servo_label} to {self.__servo_val}")
 
     def start_stop_gui_simulation(self):
-        pass
+        if self.__simulation_proc and self.__simulation_proc.state() == QProcess.ProcessState.Running:
+            # need to stop the simulation - will act as a toggle y'allsies
+            self.__simulation_proc.terminate()
+            self.__simulation_proc.waitForFinished(3000) # TODO: make this not block
+            self.__simulation_mode = False
+            self.__simulation_proc = None
+            self.simulation_on_or_off.setText("SIM: OFF") # TODO: see if this is the correct label
+            self.gui_simulation_button.setText("Start GUI Simulation")
+            self.update_gui_log("GUI Simulation stopped") # TODO: CHECK IF LUKE WANTS THIS
+        else:
+            # need to start simulation - yeehaw!
+            self.__simulation_proc = QProcess(self)
+            self.__simulation_proc.readyReadStandardOutput.connect(self.recv_simulation_data)
+            self.__simulation_proc.start("python", ["cansat_simulation.py"])
+            self.__simulation_mode = True
+            self.simulation_on_or_off.setText("SIM: ON") # TODO: see if this is the correct label
+            self.gui_simulation_button.setText("Stop GUI Simulation")
+            self.update_gui_log("GUI Simulation started") # TODO: CHECK IF LUKE WANTS THIS
+    
+    def recv_simulation_data(self):
+        while self.__simulation_proc.canReadLine():
+            line = self.__simulation_proc.readLine().data().decode().strip()
+            self.__recveived_data = line # TODO: CHECK IF THIS IS RIGHT - THERE IS A TYPO WITH THIS VARIABLE THAT IS BOTHERING MEEEEE
+            self.__data_received.emit() 
+
 
     def toggle_camera(self):
         if(self.send_data("CMD,%d,MEC,%s:X" % (self.__TEAM_ID, self.__camera_id))):
