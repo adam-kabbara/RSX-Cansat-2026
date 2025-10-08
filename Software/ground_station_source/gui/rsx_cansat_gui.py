@@ -21,7 +21,7 @@ import pyqtgraph as pg
 from pyqtgraph import mkPen
 from enum import Enum
 from PyQt6.QtSerialPort import QSerialPortInfo, QSerialPort
-from PyQt6.QtCore import Qt, pyqtSignal, QIODevice, QTimer, QTime, pyqtSlot, QUrl
+from PyQt6.QtCore import Qt, pyqtSignal, QIODevice, QTimer, QTime, pyqtSlot, QUrl, QProcess
 from PyQt6.QtGui import QFont, QIcon, QIntValidator, QColor, QPalette, QTextCursor
 from PyQt6.QtWidgets import (
     QApplication,
@@ -45,7 +45,6 @@ from PyQt6.QtWidgets import (
     QAbstractItemView,
     QTextEdit,
     QApplication,
-    QProcess,
 )
 
 # Structure to store packet data
@@ -1102,7 +1101,8 @@ class GroundStationApp(QMainWindow):
             self.__simulation_proc.waitForFinished(3000) # TODO: make this not block
             self.__simulation_mode = False
             self.__simulation_proc = None
-            self.simulation_on_or_off.setText("SIM: OFF") # TODO: see if this is the correct label
+            self.simulation_on_or_off.setText(f'<span style="color:black;">GUI Simulation: \
+                                              </span><span style="color:GREY;">OFF</span>') 
             self.gui_simulation_button.setText("Start GUI Simulation")
             self.update_gui_log("GUI Simulation stopped") # TODO: CHECK IF LUKE WANTS THIS
         else:
@@ -1111,7 +1111,8 @@ class GroundStationApp(QMainWindow):
             self.__simulation_proc.readyReadStandardOutput.connect(self.recv_simulation_data)
             self.__simulation_proc.start("python", ["cansat_simulation.py"])
             self.__simulation_mode = True
-            self.simulation_on_or_off.setText("SIM: ON") # TODO: see if this is the correct label
+            self.simulation_on_or_off.setText(f'<span style="color:black;">GUI Simulation: \
+                                              </span><span style="color:GREEN;">ON</span>') 
             self.gui_simulation_button.setText("Stop GUI Simulation")
             self.update_gui_log("GUI Simulation started") # TODO: CHECK IF LUKE WANTS THIS
     
@@ -1368,6 +1369,10 @@ class GroundStationApp(QMainWindow):
         if self.__csv_file is not None:
             if not self.__csv_file.closed:
                 self.__csv_file.close()
+        if self.__simulation_proc:
+            self.__simulation_proc.terminate()
+            self.__simulation_proc.waitForFinished(3000)
+            self.__simulation_proc = None
 
     def update_packet_label(self):
         self.label_packet_count.setText(f'<span style="color:black;">Packets Received: \
