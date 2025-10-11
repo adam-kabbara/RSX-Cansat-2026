@@ -5,6 +5,5 @@ venv/
 build
 mx.scratch
 *.ld
-.settings/
 Debug/
 Release/
