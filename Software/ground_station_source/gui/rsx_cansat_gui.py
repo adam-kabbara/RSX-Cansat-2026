@@ -1231,9 +1231,8 @@ class GroundStationApp(QMainWindow):
 
     def send_data(self, msg):
         if self.__simulation_mode and self.__simulation_proc:
-            self.__simulation_proc.stdin.write((msg + "\n").encode()) # sending to simulation!!!!
+            self.__simulation_proc.write((msg + "\n").encode()) # sending to simulation!!!!
             return 1
-        
 
         if self.__serial.isOpen() is True:
             try:
