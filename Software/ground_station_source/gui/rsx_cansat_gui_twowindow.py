@@ -8,6 +8,7 @@ TODO:
 - graph should auto scroll?
 - remove command log horizontal scrolling (idk how)
 """
+
 import sys
 import webbrowser
 from datetime import datetime, timezone
@@ -21,8 +22,8 @@ import pyqtgraph as pg
 from pyqtgraph import mkPen
 from enum import Enum
 from PyQt6.QtSerialPort import QSerialPortInfo, QSerialPort
-from PyQt6.QtCore import Qt, pyqtSignal, QIODevice, QTimer, QTime, pyqtSlot, QUrl, QProcess
-from PyQt6.QtGui import QFont, QIcon, QIntValidator, QColor, QPalette, QTextCursor
+from PyQt6.QtCore import Qt, pyqtSignal, QIODevice, QTimer, QTime, pyqtSlot, QUrl
+from PyQt6.QtGui import QFont, QIcon, QIntValidator, QColor, QPalette
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -43,10 +44,8 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QAbstractItemView,
-    QTextEdit,
     QApplication,
 )
-from PyQt6.QtWebEngineWidgets import QWebEngineView
 
 # Structure to store packet data
 @dataclass(frozen=True)
@@ -254,15 +253,16 @@ class CommandButtonGroup(Enum):
     CONNECTION = 4
     TELEMETRY = 5
 
-class GroundStationApp(QMainWindow):
+class TopWindow(QMainWindow):
+    """Top window containing commands, status, and command log"""
 
     # Emit a signal when serial data is received
     __data_received = pyqtSignal()
 
-    def __init__(self):
-
+    def __init__(self, bottom_window):
         super().__init__()
         
+        self.bottom_window = bottom_window
         self.__data_received.connect(self.process_data)
 
         # Define macros for some variables
@@ -294,12 +294,8 @@ class GroundStationApp(QMainWindow):
         self.__last_gyro_r                  = 0.0
         self.__last_gyro_p                  = 0.0
         self.__last_gyro_y                  = 0.0
-        self.log_repeat_count             = 0
-        self.last_msg, self.last_color  = None, None
-        self.__simulation_proc              = None
-        self.__simulation_mode              = False
 
-        self.setWindowTitle("CANSAT Ground Station")
+        self.setWindowTitle("CANSAT Ground Station - Control Panel")
         self.setWindowIcon(QIcon('icon.png'))
 
         tray = QSystemTrayIcon()
@@ -332,8 +328,6 @@ class GroundStationApp(QMainWindow):
         grid_layout = QGridLayout(self.central_widget)
         grid_layout.setHorizontalSpacing(10)
         grid_layout.setVerticalSpacing(20)
-        grid_layout.setRowStretch(0, 1)
-        grid_layout.setRowStretch(1, 2)
 
         # ------ COMMANDS GROUP ------ #
         commands_group_box = QGroupBox()
@@ -560,11 +554,6 @@ class GroundStationApp(QMainWindow):
         self.team_id_field_info.hide()
         self.team_id_field.hide()
 
-        self.gui_simulation_button = QPushButton("Start GUI Simulation")
-        self.gui_simulation_button.setFont(button_font)
-        self.gui_simulation_button.clicked.connect(self.start_stop_gui_simulation) #TODO: WRITE THIS FUNCTION
-        self.gui_simulation_button.hide()
-
         commands_layout.addWidget(self.button_connection_group)
         commands_layout.addWidget(self.combo_select_port)
         commands_layout.addWidget(self.button_connect)
@@ -590,7 +579,6 @@ class GroundStationApp(QMainWindow):
         commands_layout.addWidget(self.button_get_log_data)
         commands_layout.addWidget(self.probe_release_force)
         commands_layout.addLayout(team_id_editing_box)
-        commands_layout.addWidget(self.gui_simulation_button)
         commands_layout.addWidget(self.button_back)
 
         grid_layout.setColumnStretch(0,1)
@@ -613,7 +601,6 @@ class GroundStationApp(QMainWindow):
             self.button_get_log_data,
             self.team_id_field,
             self.team_id_field_info,
-            self.gui_simulation_button,
         ]
 
         self.buttons_telemetry = [
@@ -722,12 +709,6 @@ class GroundStationApp(QMainWindow):
         self.camera2_status_label.setText(f'<span style="color:black;">CAMERA2 Status: \
                                               </span><span style="color:GREY;">N/A</span>')
 
-        self.simulation_on_or_off = QLabel()
-        self.simulation_on_or_off.setFont(command_status_font)
-        self.simulation_on_or_off.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
-        self.simulation_on_or_off.setText(f'<span style="color:black;">GUI Simulation: \
-                                              </span><span style="color:GREY;">OFF</span>')
-        
         status_layout.addWidget(self.label_port)
         status_layout.addWidget(self.label_remote_mode)
         status_layout.addWidget(self.label_remote_state)
@@ -737,7 +718,6 @@ class GroundStationApp(QMainWindow):
         status_layout.addWidget(self.camera1_status_label)
         status_layout.addWidget(self.camera2_status_label)
         status_layout.addWidget(self.label_cmd_echo)
-        status_layout.addWidget(self.simulation_on_or_off)
 
         grid_layout.setColumnStretch(1,1)
 
@@ -748,227 +728,30 @@ class GroundStationApp(QMainWindow):
         log_widget = QWidget()
         log_layout = QVBoxLayout(log_widget)
 
-        gui_log_title = QLabel("Command Log")
-        gui_log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        gui_log_title.setFont(graph_sidebar_font)
+        log_title = QLabel("Command Log")
+        log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        log_title.setFont(graph_sidebar_font)
 
-        error_log_title = QLabel("Error Log")
-        error_log_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        error_log_title.setFont(graph_sidebar_font)
-
-        self.gui_log = QTextEdit()
-        self.gui_log.setReadOnly(True)
+        self.gui_log = QListWidget()
+        self.gui_log.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.gui_log.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.gui_log.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.gui_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
-        self.gui_log.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.gui_log.setStyleSheet("""
-            QTextEdit {
+            QListWidget {
                 font-size: 18px;
                 background-color: #dcdcdc;
                 border-radius: 6px;
                 padding: 3px;
-                font-family: monospace;
             }
         """)
 
-        self.error_log = QTextEdit()
-        self.error_log.setReadOnly(True)
-        self.error_log.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.error_log.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
-        self.error_log.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.error_log.setStyleSheet("""
-            QTextEdit {
-                font-size: 18px;
-                background-color: #dcdcdc;
-                border-radius: 6px;
-                padding: 3px;
-                font-family: monospace;
-            }
-        """)
-
-        log_layout.addWidget(gui_log_title)
+        log_layout.addWidget(log_title)
         log_layout.addWidget(self.gui_log)
-
-        log_layout.addWidget(error_log_title)
-        log_layout.addWidget(self.error_log)
 
         grid_layout.setColumnStretch(2,1)
 
         grid_layout.addWidget(log_widget, 0, 2)
         # ------ END LOG GROUP ------ #
-
-        # ------ GRAPH GROUP ------ #
-        graph_parent_group = QHBoxLayout()
-        self.tab_widget = QTabWidget()
-        graph_parent_group.addWidget(self.tab_widget, stretch=8)
-
-        self.tab_widget.setStyleSheet("""
-            QTabBar::tab {
-                font-size: 14pt;
-                padding: 4px 8px;
-                background: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, 
-                                    stop:0 rgba(255, 255, 255, 255), 
-                                    stop:1 rgba(240, 240, 240, 255)); 
-                border: 1px solid lightgray;
-                border-top-left-radius: 6px;
-                border-top-right-radius: 6px;
-            }
-            QTabBar::tab:selected {
-                background: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, 
-                                    stop:0 rgba(240, 240, 240, 255), 
-                                    stop:1 rgba(210, 210, 210, 255)); 
-            }
-        """)
-        self.tab_widget.currentChanged.connect(self.on_tab_changed)
-
-
-        self.graphs = []
-        self.plotters = []
-
-        graph_info = [
-            {"title": "Altitude", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "m"},
-            {"title": "Temperature", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "°C"},
-            {"title": "Pressure", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "kPa"},
-            {"title": "Voltage", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "V"},
-            {"title": "Gyro", "lines": 3, "2d": False, "x_unit": "s", "y_unit": "deg/s"},
-            {"title": "Accel RPY ", "lines": 3, "2d": False, "x_unit": "s", "y_unit": "deg/s^2"},
-            {"title": "Accel XYZ", "lines": 3, "2d": False, "x_unit": "s", "y_unit":"m/s^2"},
-            {"title": "Magnetometer", "lines": 3, "2d": False, "x_unit": "s", "y_unit": "G"},
-            {"title": "Rotation", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "deg/s"},
-            {"title": "GPS Lat v Long", "lines": 1, "2d": True, "x_unit": "Latitude", "y_unit": "Longitude"},
-            {"title": "GPS Altitude", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "m"},
-            {"title": "GPS Map", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "m"}
-        ]   
-        
-        self.graph_title_to_index = {
-            "Altitude" : 0,
-            "Temperature" : 1,
-            "Pressure" : 2,
-            "Voltage" : 3,
-            "Gyro" : 4,
-            "Gyro Diff": 5,
-            "Accel" : 6,
-            "Mag" : 7,
-            "Rotation" : 8,
-            "GPS" : 9,
-            "GPS Altitude": 10,
-            "GPS Map": 11
-        }
-
-        # Loop through each graph and create a plot using the plot classes
-        # Add the graph to a new tab and store plots for updating later
-        for entry in graph_info:
-
-            tab_content = QGroupBox()
-            tab_layout = QVBoxLayout()
-
-            if entry["title"] == "GPS Map":
-                self.gps_map_webview = QWebEngineView()
-                tab_layout.addWidget(self.gps_map_webview)
-                tab_content.setLayout(tab_layout)
-                self.tab_widget.addTab(tab_content, entry["title"])
-                self.graphs.append(None)
-                self.plotters.append(None)
-                continue
-
-            graph = pg.PlotWidget()
-            graph.setBackground('w')
-            graph.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            tab_layout.addWidget(graph)
-            
-
-            tab_content.setLayout(tab_layout)
-
-            self.tab_widget.addTab(tab_content, entry["title"])
-
-            self.graphs.append(graph)
-
-            if entry["lines"] == 1 and entry["2d"] is False:
-                plotter = DynamicPlotter(graph, title=entry["title"], timewindow=self.__graph_time_window,x_unit=entry["x_unit"],y_unit=entry["y_unit"])
-            elif entry["lines"] > 1 and entry["2d"] is False:
-                plotter = DynamicPlotter_MultiLine(graph, title=entry["title"], 
-                                                   timewindow=self.__graph_time_window, num_lines=entry["lines"],
-                                                   x_unit=entry["x_unit"],y_unit=entry["y_unit"])
-            else:
-                init_lat = 38.149574
-                init_long = 79.0737
-                plotter = DynamicPlotter_2d(
-                    graph, title=entry["title"], timewindow=self.__graph_time_window,
-                    x_unit=entry["x_unit"], y_unit=entry["y_unit"],
-                    init_x=init_lat, init_y=init_long
-                )
-
-            self.plotters.append(plotter)
-
-        # Sidebar to show all current graph values
-        sidebar_widget = QWidget()
-        sidebar = QVBoxLayout(sidebar_widget)
-
-        self.info_label = QLabel("Live Values")
-        self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.info_label.setFont(graph_sidebar_font)
-
-        self.credit_label = QLabel("RSX @ University of Toronto")
-        self.credit_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-        self.credit_label.setFont(credit_font)
-
-        self.live_graph_values = QFormLayout()
-
-        sidebar_fields_data = [
-            ("Altitude", "0.0 m"),
-            ("Temperature", "0.0 °C"),
-            ("Pressure", "0.0 kPa"),
-            ("Voltage", "0.0 V"),
-            ("Gyro R", "0 °/s"),
-            ("Gyro P", "0 °/s"),
-            ("Gyro Y", "0 °/s"),
-            ("Accel X", "0 m/s²"),
-            ("Accel Y", "0 m/s²"),
-            ("Accel Z", "0 m/s²"),
-            ("RAccel R", "0 °/s²"),
-            ("RAccel P", "0 °/s²"),
-            ("RAccel Y", "0 °/s²"),
-            ("Mag R", "0 G"),
-            ("Mag P", "0 G"),
-            ("Mag Y", "0 G"),
-            ("Rotation", "0 °/s"),
-            ("GPS Lat", "0.0000°"),
-            ("GPS Long", "0.0000°"),
-            ("GPS Altitude", "0.0 m"),
-            ("GPS Time", "00:00:00"),
-        ]
-
-        self.sidebar_data_labels = []
-
-        self.sidebar_data_dict = {name: idx for idx, (name, _) in enumerate(sidebar_fields_data)}
-
-        for field_name, field_value in sidebar_fields_data:
-            # Create the field label and data label
-            field_label = QLabel(f"{field_name}:")
-            data_label = QLabel(field_value)
-
-            # Set fonts
-            field_label.setFont(live_graph_field_font)
-            data_label.setFont(live_graph_data_font)
-
-            # Add them to your lists (or directly to your layout if needed)
-            self.sidebar_data_labels.append(data_label)
-
-            self.live_graph_values.addRow(field_label, data_label)
-
-        form_group = QGroupBox()
-        form_group.setLayout(self.live_graph_values)
-
-        sidebar.addWidget(self.info_label)
-        sidebar.addWidget(form_group)
-        sidebar.addStretch()
-        sidebar.addWidget(self.credit_label)
-
-        graph_parent_group.addWidget(sidebar_widget, stretch=2)
-        graph_parent_group.setSpacing(15)
-
-        grid_layout.addLayout(graph_parent_group, 1, 0, 1, 3)
-        # ------ END GRAPH GROUP ------ #
 
         # ------ START CSV FILE ------- #
         self.__csv_file = open("cansat_data_just_need_esp_files.csv", "w", newline="")
@@ -976,57 +759,29 @@ class GroundStationApp(QMainWindow):
         self.__csv_writer.writeheader()
         # ------- END CSV FILE -------- #
 
-        self.showMaximized()
+        self.show()
     
     # ------ FUNCTIONS ------ #
-    def on_tab_changed(self, index):
-        # If the new tab is the GPS Map tab, update the map view
-        if index == self.graph_title_to_index.get("GPS Map"):
-            self.update_map_view(self.GPS_LAT, self.GPS_LONG)
-
     def update_map_view(self, lat, lon):
         try:
-            # Currently map is plotting dummy data. 
-            # TODO: use real GPS data from lat and lon variables to plot to the webview
-            if self.gps_map_webview:
-                url = f"http://127.0.0.1:5000"
-                self.gps_map_webview.load(QUrl(url))
-                self.update_gui_log(f"Updated embedded map view to: {url}", "blue")
-            
+            # if self.GPS_LAT or self.GPS_LONG are not valid, open a not updated map thing
+            if lat is None or lon is None or lat == 0.0 or lon == 0.0:
+                self.update_gui_log("No GPS data yet", "red")
+                return
+            webbrowser.open(f"https://www.google.com/maps/place/{lat},{lon}", new=2) # use google maps if there is data
+
         except Exception as e:
             self.update_gui_log(f"Map update failed: {e}", "red")
-            webbrowser.open("map.html", new=2)
-
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.get_log_overlay.setGeometry(self.rect())
 
     def update_gui_log(self, msg, color="black"):
-        if color == "red":
-            target_log = self.error_log
-        else:
-            target_log = self.gui_log
-        current_time = QTime.currentTime().toString('h:mm AP')
-        if msg == self.last_msg and color == self.last_color:
-            self.log_repeat_count += 1
-            target_log.setTextColor(QColor(color))
-            cursor = target_log.textCursor()
-            cursor.movePosition(QTextCursor.MoveOperation.End)
-            cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock, QTextCursor.MoveMode.MoveAnchor)
-            cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
-            cursor.insertText(f"{current_time} [{self.log_repeat_count}] {msg}")
-            cursor.clearSelection()
-            cursor.movePosition(QTextCursor.MoveOperation.End)
-            target_log.setTextCursor(cursor)
-        else:
-            self.log_repeat_count = 1
-            self.last_msg = msg
-            self.last_color = color
-            target_log.setTextColor(QColor(color))
-            target_log.append(f"{current_time}     {msg}")
-        scrollbar = target_log.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        log_item = QListWidgetItem(f"{QTime.currentTime().toString('h:mm AP')}     {msg}")
+        log_item.setForeground(QColor(color))
+        self.gui_log.addItem(log_item)
+        self.gui_log.scrollToBottom()
 
     # Change what buttons are shown in the commands box
     def command_group_change_buttons(self, mode):
@@ -1141,35 +896,6 @@ class GroundStationApp(QMainWindow):
             servo_label = self.servo_id_field.itemText(self.servo_id_field.findData(self.__servo_id))
             self.update_gui_log(f"Sent command to program {servo_label} to {self.__servo_val}")
 
-    def start_stop_gui_simulation(self):
-        if self.__simulation_proc and self.__simulation_proc.state() == QProcess.ProcessState.Running:
-            # need to stop the simulation - will act as a toggle y'allsies
-            self.__simulation_proc.terminate()
-            self.__simulation_proc.waitForFinished(3000) # TODO: make this not block
-            self.__simulation_mode = False
-            self.__simulation_proc = None
-            self.simulation_on_or_off.setText(f'<span style="color:black;">GUI Simulation: \
-                                              </span><span style="color:GREY;">OFF</span>') 
-            self.gui_simulation_button.setText("Start GUI Simulation")
-            self.update_gui_log("GUI Simulation stopped") # TODO: CHECK IF LUKE WANTS THIS
-        else:
-            # need to start simulation - yeehaw!
-            self.__simulation_proc = QProcess(self)
-            self.__simulation_proc.readyReadStandardOutput.connect(self.recv_simulation_data)
-            self.__simulation_proc.start("python", ["cansat_simulation.py"])
-            self.__simulation_mode = True
-            self.simulation_on_or_off.setText(f'<span style="color:black;">GUI Simulation: \
-                                              </span><span style="color:GREEN;">ON</span>') 
-            self.gui_simulation_button.setText("Stop GUI Simulation")
-            self.update_gui_log("GUI Simulation started") # TODO: CHECK IF LUKE WANTS THIS
-    
-    def recv_simulation_data(self):
-        while self.__simulation_proc.canReadLine():
-            line = self.__simulation_proc.readLine().data().decode().strip()
-            self.__recveived_data = line # TODO: CHECK IF THIS IS RIGHT - THERE IS A TYPO WITH THIS VARIABLE THAT IS BOTHERING MEEEEE
-            self.__data_received.emit() 
-
-
     def toggle_camera(self):
         if(self.send_data("CMD,%d,MEC,%s:X" % (self.__TEAM_ID, self.__camera_id))):
             self.update_gui_log(f"Sent {self.__camera_id} toggle command")
@@ -1192,7 +918,6 @@ class GroundStationApp(QMainWindow):
         time.sleep(1)
         if(self.send_data("CMD,%d,MEC,CAMERA2_STAT:X" % self.__TEAM_ID)):
             self.update_gui_log("Requesting CAMERA2 status")
-
 
     def change_sim_mode(self, mode):
         if(self.send_data("CMD,%d,SIM,%s" % (self.__TEAM_ID, mode))):
@@ -1221,7 +946,8 @@ class GroundStationApp(QMainWindow):
                 self.update_gui_log("SENT TRANSMISSION ON COMMAND")
                 self.__packet_recv_count = 0
 
-                for plotter in self.plotters:
+                # Reset plots in bottom window
+                for plotter in self.bottom_window.plotters:
                     plotter.reset_plot()
 
         else:
@@ -1277,10 +1003,6 @@ class GroundStationApp(QMainWindow):
             self.update_gui_log(f"SERIAL ERROR: {error} detected")
 
     def send_data(self, msg):
-        if self.__simulation_mode and self.__simulation_proc:
-            self.__simulation_proc.write((msg + "\n").encode()) # sending to simulation!!!!
-            return 1
-
         if self.__serial.isOpen() is True:
             try:
                 msg = msg + "\n"
@@ -1373,7 +1095,7 @@ class GroundStationApp(QMainWindow):
             if "BEGIN_SIMP" in msg:
                 if(self.__cansat_mode == "SIM"):
                     try:
-                        with open("team1011_sim_data.txt", 'r') as file:
+                        with open("cansat_2023_simp.txt", 'r') as file:
                             for line in file:
                                 if line.startswith("CMD,$,SIMP"):
                                     line = line.replace('$', str(self.__TEAM_ID))
@@ -1392,8 +1114,8 @@ class GroundStationApp(QMainWindow):
     
     def reset_mission(self):     
         self.gui_log.clear()
-        self.error_log.clear()
-        for plotter in self.plotters:
+        # Reset plots in bottom window
+        for plotter in self.bottom_window.plotters:
                 plotter.reset_plot()
         self.__csv_file.seek(0)
         self.__csv_file.truncate()
@@ -1416,10 +1138,6 @@ class GroundStationApp(QMainWindow):
         if self.__csv_file is not None:
             if not self.__csv_file.closed:
                 self.__csv_file.close()
-        if self.__simulation_proc:
-            self.__simulation_proc.terminate()
-            self.__simulation_proc.waitForFinished(3000)
-            self.__simulation_proc = None
 
     def update_packet_label(self):
         self.label_packet_count.setText(f'<span style="color:black;">Packets Received: \
@@ -1437,62 +1155,62 @@ class GroundStationApp(QMainWindow):
         
         data = self.extract_data_str(msg)
 
-        # Update graphs and live data values
+        # Update graphs and live data values in bottom window
         if data.ALTITUDE is not None:
-            self.plotters[self.graph_title_to_index.get("Altitude")].update_plot(data.ALTITUDE)
-            self.sidebar_data_labels[self.sidebar_data_dict.get("Altitude")].setText(f"{data.ALTITUDE} m")
+            self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("Altitude")].update_plot(data.ALTITUDE)
+            self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Altitude")].setText(f"{data.ALTITUDE} m")
         
         if data.TEMPERATURE is not None:
-            self.plotters[self.graph_title_to_index.get("Temperature")].update_plot(data.TEMPERATURE)
-            self.sidebar_data_labels[self.sidebar_data_dict.get("Temperature")].setText(f"{data.TEMPERATURE} °C")
+            self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("Temperature")].update_plot(data.TEMPERATURE)
+            self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Temperature")].setText(f"{data.TEMPERATURE} °C")
 
         if data.PRESSURE is not None:
-            self.plotters[self.graph_title_to_index.get("Pressure")].update_plot(data.PRESSURE)
-            self.sidebar_data_labels[self.sidebar_data_dict.get("Pressure")].setText(f"{data.PRESSURE} kPa")
+            self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("Pressure")].update_plot(data.PRESSURE)
+            self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Pressure")].setText(f"{data.PRESSURE} kPa")
         
         if data.VOLTAGE is not None:
-            self.plotters[self.graph_title_to_index.get("Voltage")].update_plot(data.VOLTAGE)
-            self.sidebar_data_labels[self.sidebar_data_dict.get("Voltage")].setText(f"{data.VOLTAGE} V")
+            self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("Voltage")].update_plot(data.VOLTAGE)
+            self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Voltage")].setText(f"{data.VOLTAGE} V")
 
         new_gyro_data = [data.GYRO_R, data.GYRO_P, data.GYRO_Y]
-        self.plotters[self.graph_title_to_index.get("Gyro")].update_plot(new_gyro_data)
-        self.sidebar_data_labels[self.sidebar_data_dict.get("Gyro R")].setText(f"{data.GYRO_R} °/s")
-        self.sidebar_data_labels[self.sidebar_data_dict.get("Gyro P")].setText(f"{data.GYRO_P} °/s")
-        self.sidebar_data_labels[self.sidebar_data_dict.get("Gyro Y")].setText(f"{data.GYRO_Y} °/s")
+        self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("Gyro")].update_plot(new_gyro_data)
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Gyro R")].setText(f"{data.GYRO_R} °/s")
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Gyro P")].setText(f"{data.GYRO_P} °/s")
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Gyro Y")].setText(f"{data.GYRO_Y} °/s")
         gyro_diff_data = [data.GYRO_R - self.__last_gyro_r, data.GYRO_P - self.__last_gyro_p, data.GYRO_Y - self.__last_gyro_y]
-        self.plotters[self.graph_title_to_index.get("Gyro Diff")].update_plot(gyro_diff_data)
+        self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("Gyro Diff")].update_plot(gyro_diff_data)
         self.__last_gyro_r = data.GYRO_R
         self.__last_gyro_p = data.GYRO_P
         self.__last_gyro_y = data.GYRO_Y
-        self.sidebar_data_labels[self.sidebar_data_dict.get("RAccel R")].setText(f"{gyro_diff_data[0]} °/s²")
-        self.sidebar_data_labels[self.sidebar_data_dict.get("RAccel P")].setText(f"{gyro_diff_data[1]} °/s²")
-        self.sidebar_data_labels[self.sidebar_data_dict.get("RAccel Y")].setText(f"{gyro_diff_data[2]} °/s²")
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("RAccel R")].setText(f"{gyro_diff_data[0]} °/s²")
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("RAccel P")].setText(f"{gyro_diff_data[1]} °/s²")
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("RAccel Y")].setText(f"{gyro_diff_data[2]} °/s²")
 
         new_accel_data = [data.ACCEL_R, data.ACCEL_P, data.ACCEL_Y]
-        self.plotters[self.graph_title_to_index.get("Accel")].update_plot(new_accel_data)
-        self.sidebar_data_labels[self.sidebar_data_dict.get("Accel X")].setText(f"{data.ACCEL_R} m/s²")
-        self.sidebar_data_labels[self.sidebar_data_dict.get("Accel Y")].setText(f"{data.ACCEL_P} m/s²")
-        self.sidebar_data_labels[self.sidebar_data_dict.get("Accel Z")].setText(f"{data.ACCEL_Y} m/s²")
+        self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("Accel")].update_plot(new_accel_data)
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Accel X")].setText(f"{data.ACCEL_R} m/s²")
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Accel Y")].setText(f"{data.ACCEL_P} m/s²")
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Accel Z")].setText(f"{data.ACCEL_Y} m/s²")
 
         new_mag_data = [data.MAG_R, data.MAG_P, data.MAG_Y]
-        self.plotters[self.graph_title_to_index.get("Mag")].update_plot(new_mag_data)
-        self.sidebar_data_labels[self.sidebar_data_dict.get("Mag R")].setText(f"{data.MAG_R} G")
-        self.sidebar_data_labels[self.sidebar_data_dict.get("Mag P")].setText(f"{data.MAG_P} G")
-        self.sidebar_data_labels[self.sidebar_data_dict.get("Mag Y")].setText(f"{data.MAG_Y} G")
+        self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("Mag")].update_plot(new_mag_data)
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Mag R")].setText(f"{data.MAG_R} G")
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Mag P")].setText(f"{data.MAG_P} G")
+        self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Mag Y")].setText(f"{data.MAG_Y} G")
         
         if data.AUTO_GYRO_ROTATION_RATE is not None:
-            self.plotters[self.graph_title_to_index.get("Rotation")].update_plot(data.AUTO_GYRO_ROTATION_RATE)
-            self.sidebar_data_labels[self.sidebar_data_dict.get("Rotation")].setText(f"{data.AUTO_GYRO_ROTATION_RATE} °/s")
+            self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("Rotation")].update_plot(data.AUTO_GYRO_ROTATION_RATE)
+            self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("Rotation")].setText(f"{data.AUTO_GYRO_ROTATION_RATE} °/s")
 
         if data.GPS_LATITUDE is not None and data.GPS_LONGITUDE is not None:
-            self.plotters[self.graph_title_to_index.get("GPS")].update_plot(data.GPS_LATITUDE, data.GPS_LONGITUDE)
-            self.sidebar_data_labels[self.sidebar_data_dict.get("GPS Lat")].setText(f"{data.GPS_LATITUDE}°")
-            self.sidebar_data_labels[self.sidebar_data_dict.get("GPS Long")].setText(f"{data.GPS_LONGITUDE}°")
+            self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("GPS")].update_plot(data.GPS_LATITUDE, data.GPS_LONGITUDE)
+            self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("GPS Lat")].setText(f"{data.GPS_LATITUDE}°")
+            self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("GPS Long")].setText(f"{data.GPS_LONGITUDE}°")
             self.GPS_LAT, self.GPS_LONG = data.GPS_LATITUDE, data.GPS_LONGITUDE
         
         if data.GPS_ALTITUDE is not None:
-            self.plotters[self.graph_title_to_index.get("GPS Altitude")].update_plot(data.GPS_ALTITUDE)
-            self.sidebar_data_labels[self.sidebar_data_dict.get("GPS Altitude")].setText(f"{data.GPS_ALTITUDE} m")
+            self.bottom_window.plotters[self.bottom_window.graph_title_to_index.get("GPS Altitude")].update_plot(data.GPS_ALTITUDE)
+            self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("GPS Altitude")].setText(f"{data.GPS_ALTITUDE} m")
         
         if data.MISSION_TIME is not None:
             self.label_mission_time.setText(f'<span style="color:black;">Mission Time: \
@@ -1512,7 +1230,7 @@ class GroundStationApp(QMainWindow):
             self.label_remote_state.setText(f'<span style="color:black;">CANSAT State: \
                                               </span><span style="color:BLUE;">{data.STATE}</span>')
         if data.GPS_TIME is not None:
-            self.sidebar_data_labels[self.sidebar_data_dict.get("GPS Time")].setText(f"{data.GPS_TIME}")
+            self.bottom_window.sidebar_data_labels[self.bottom_window.sidebar_data_dict.get("GPS Time")].setText(f"{data.GPS_TIME}")
 
         if data.GPS_SATS is not None:
             self.label_sat.setText(f'<span style="color:black;">Satellites: \
@@ -1582,6 +1300,196 @@ class GroundStationApp(QMainWindow):
 
         return telemetry_data
 
+class BottomWindow(QMainWindow):
+    """Bottom window containing graphs, tabs, and live values"""
+
+    def __init__(self, top_window):
+        super().__init__()
+        self.top_window = top_window
+        
+        self.setWindowTitle("CANSAT Ground Station - Graphs & Data")
+        self.setWindowIcon(QIcon('icon.png'))
+        self.setMinimumHeight(400)
+
+        # ------ FONTS ------ #
+        graph_sidebar_font = QFont()
+        graph_sidebar_font.setPointSize(14)
+        graph_sidebar_font.setWeight(QFont.Weight.DemiBold)
+        credit_font = QFont("Courier New")
+        credit_font.setPointSize(10)
+        live_graph_data_font = QFont("Roboto Mono")
+        live_graph_data_font.setPointSize(14)
+        live_graph_field_font = QFont()
+        live_graph_field_font.setPointSize(14)
+        # ------ FONTS ------ #
+
+        # CENTRAL WIDGET
+        self.central_widget = QWidget(self)
+        self.setCentralWidget(self.central_widget)
+
+        main_layout = QVBoxLayout(self.central_widget)
+
+        # ------ GRAPH GROUP ------ #
+        graph_parent_group = QHBoxLayout()
+        self.tab_widget = QTabWidget()
+        graph_parent_group.addWidget(self.tab_widget, stretch=8)
+
+        self.tab_widget.setStyleSheet("""
+            QTabBar::tab {
+                font-size: 14pt;
+                padding: 4px 8px;
+                background: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, 
+                                    stop:0 rgba(255, 255, 255, 255), 
+                                    stop:1 rgba(240, 240, 240, 255)); 
+                border: 1px solid lightgray;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+            }
+            QTabBar::tab:selected {
+                background: qlineargradient(spread:pad, x1:0, y1:0, x2:0, y2:1, 
+                                    stop:0 rgba(240, 240, 240, 255), 
+                                    stop:1 rgba(210, 210, 210, 255)); 
+            }
+        """)
+
+        self.graphs = []
+        self.plotters = []
+
+        graph_info = [
+            {"title": "Altitude", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "m"},
+            {"title": "Temperature", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "°C"},
+            {"title": "Pressure", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "kPa"},
+            {"title": "Voltage", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "V"},
+            {"title": "Gyro", "lines": 3, "2d": False, "x_unit": "s", "y_unit": "deg/s"},
+            {"title": "Accel RPY ", "lines": 3, "2d": False, "x_unit": "s", "y_unit": "deg/s^2"},
+            {"title": "Accel XYZ", "lines": 3, "2d": False, "x_unit": "s", "y_unit":"m/s^2"},
+            {"title": "Magnetometer", "lines": 3, "2d": False, "x_unit": "s", "y_unit": "G"},
+            {"title": "Rotation", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "deg/s"},
+            {"title": "GPS Lat v Long", "lines": 1, "2d": True, "x_unit": "Latitude", "y_unit": "Longitude"},
+            {"title": "GPS Altitude", "lines": 1, "2d": False, "x_unit": "s", "y_unit": "m"}
+        ]   
+        
+        self.graph_title_to_index = {
+            "Altitude" : 0,
+            "Temperature" : 1,
+            "Pressure" : 2,
+            "Voltage" : 3,
+            "Gyro" : 4,
+            "Gyro Diff": 5,
+            "Accel" : 6,
+            "Mag" : 7,
+            "Rotation" : 8,
+            "GPS" : 9,
+            "GPS Altitude": 10,
+        }
+
+        # Loop through each graph and create a plot using the plot classes
+        # Add the graph to a new tab and store plots for updating later
+        for entry in graph_info:
+
+            tab_content = QGroupBox()
+            tab_layout = QVBoxLayout()
+
+            graph = pg.PlotWidget()
+            graph.setBackground('w')
+            graph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            tab_layout.addWidget(graph)
+
+            tab_content.setLayout(tab_layout)
+
+            self.tab_widget.addTab(tab_content, entry["title"])
+
+            self.graphs.append(graph)
+
+            if entry["lines"] == 1 and entry["2d"] is False:
+                plotter = DynamicPlotter(graph, title=entry["title"], timewindow=500,x_unit=entry["x_unit"],y_unit=entry["y_unit"])
+            elif entry["lines"] > 1 and entry["2d"] is False:
+                plotter = DynamicPlotter_MultiLine(graph, title=entry["title"], 
+                                                   timewindow=500, num_lines=entry["lines"],
+                                                   x_unit=entry["x_unit"],y_unit=entry["y_unit"])
+            else:
+                init_lat = 38.149574
+                init_long = 79.0737
+                plotter = DynamicPlotter_2d(
+                    graph, title=entry["title"], timewindow=500,
+                    x_unit=entry["x_unit"], y_unit=entry["y_unit"],
+                    init_x=init_lat, init_y=init_long
+                )
+
+            self.plotters.append(plotter)
+
+        # Sidebar to show all current graph values
+        sidebar_widget = QWidget()
+        sidebar = QVBoxLayout(sidebar_widget)
+
+        self.info_label = QLabel("Live Values")
+        self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.info_label.setFont(graph_sidebar_font)
+
+        self.credit_label = QLabel("RSX @ University of Toronto")
+        self.credit_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.credit_label.setFont(credit_font)
+
+        self.live_graph_values = QFormLayout()
+
+        sidebar_fields_data = [
+            ("Altitude", "0.0 m"),
+            ("Temperature", "0.0 °C"),
+            ("Pressure", "0.0 kPa"),
+            ("Voltage", "0.0 V"),
+            ("Gyro R", "0 °/s"),
+            ("Gyro P", "0 °/s"),
+            ("Gyro Y", "0 °/s"),
+            ("Accel X", "0 m/s²"),
+            ("Accel Y", "0 m/s²"),
+            ("Accel Z", "0 m/s²"),
+            ("RAccel R", "0 °/s²"),
+            ("RAccel P", "0 °/s²"),
+            ("RAccel Y", "0 °/s²"),
+            ("Mag R", "0 G"),
+            ("Mag P", "0 G"),
+            ("Mag Y", "0 G"),
+            ("Rotation", "0 °/s"),
+            ("GPS Lat", "0.0000°"),
+            ("GPS Long", "0.0000°"),
+            ("GPS Altitude", "0.0 m"),
+            ("GPS Time", "00:00:00"),
+        ]
+
+        self.sidebar_data_labels = []
+
+        self.sidebar_data_dict = {name: idx for idx, (name, _) in enumerate(sidebar_fields_data)}
+
+        for field_name, field_value in sidebar_fields_data:
+            # Create the field label and data label
+            field_label = QLabel(f"{field_name}:")
+            data_label = QLabel(field_value)
+
+            # Set fonts
+            field_label.setFont(live_graph_field_font)
+            data_label.setFont(live_graph_data_font)
+
+            # Add them to your lists (or directly to your layout if needed)
+            self.sidebar_data_labels.append(data_label)
+
+            self.live_graph_values.addRow(field_label, data_label)
+
+        form_group = QGroupBox()
+        form_group.setLayout(self.live_graph_values)
+
+        sidebar.addWidget(self.info_label)
+        sidebar.addWidget(form_group)
+        sidebar.addStretch()
+        sidebar.addWidget(self.credit_label)
+
+        graph_parent_group.addWidget(sidebar_widget, stretch=2)
+        graph_parent_group.setSpacing(15)
+
+        main_layout.addLayout(graph_parent_group)
+        # ------ END GRAPH GROUP ------ #
+
+        self.show()
+
 def customPalette():
 
     palette = QPalette()
@@ -1614,5 +1522,24 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     app.setPalette(customPalette())
-    window=GroundStationApp()
+    
+    bottom_window = BottomWindow(None)
+    top_window = TopWindow(bottom_window)
+    bottom_window.top_window = top_window 
+    
+    screen = app.primaryScreen()
+    screen_rect = screen.availableGeometry()
+    screen_width = screen_rect.width()
+    screen_height = screen_rect.height()
+    
+
+    window_width = screen_width
+    window_height = screen_height // 2
+    
+
+    top_window.setGeometry(0, 0, window_width, window_height)
+    bottom_window.setGeometry(0, window_height, window_width, window_height)
+    
+
+    
     app.exec()

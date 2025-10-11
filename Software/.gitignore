@@ -1,0 +1,9 @@
+.vscode/
+venv/
+
+# STM32
+build
+mx.scratch
+*.ld
+Debug/
+Release/

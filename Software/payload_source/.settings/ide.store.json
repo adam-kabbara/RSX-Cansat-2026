@@ -1,7 +1,0 @@
-{
-  "board": "NUCLEO-G431KB",
-  "device": "STM32G431KBT6",
-  "core": "Cortex-M4",
-  "order": 0,
-  "toolchain": "GCC"
-}
