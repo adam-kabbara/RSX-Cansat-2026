@@ -91,7 +91,7 @@ void loop() {
     Serial.print(alpha_x, 3); Serial.print(","); Serial.print(alpha_y, 3); Serial.print(","); Serial.print(alpha_z, 3); Serial.print(","); // Angular ACCEL
     Serial.print(ax, 3); Serial.print(","); Serial.print(ay, 3); Serial.print(","); Serial.println(az, 3); // Linear ACCEL
 
-    delay(500);
+    delay(50);
   }
 
   if (sensorValue.sensorId == SH2_ACCELEROMETER) {
